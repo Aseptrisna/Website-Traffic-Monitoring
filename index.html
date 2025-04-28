@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Traffic Monitoring - Vehicle Detection</title>
+    <link rel="icon" href="logo.png" type="image/x-icon">
+    <style>
+        /* Global styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f2f5;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        header {
+            background-color: #1a3e72;
+            color: white;
+            width: 100%;
+            padding: 10px 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1000;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+        }
+
+        header img {
+            height: 40px;
+            margin-right: 15px;
+        }
+
+        header h1 {
+            font-size: 22px;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .stats-display {
+            background-color: rgba(255, 255, 255, 0.15);
+            padding: 8px 15px;
+            border-radius: 20px;
+            margin-right: 15px;
+            font-size: 14px;
+        }
+
+        #link-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+
+        #link-button:hover {
+            background-color: #3e8e41;
+        }
+
+        #main-content {
+            flex: 1;
+            width: 100%;
+            padding-top: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .dashboard {
+            width: 95%;
+            max-width: 1400px;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        #camera-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+
+        .camera-view {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+
+        .camera-view img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: opacity 0.3s;
+            opacity: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .camera-view:hover img {
+            transform: scale(1.02);
+        }
+
+        .camera-view img.loaded {
+            opacity: 1;
+        }
+
+        .image-loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #1a3e72;
+            animation: spin 1s ease-in-out infinite;
+            z-index: 2;
+        }
+
+        .camera-info {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+            color: white;
+            padding: 15px;
+        }
+
+        .camera-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+
+        .camera-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+        }
+
+        .stat-item i {
+            margin-right: 5px;
+            font-size: 14px;
+        }
+
+        .sidebar {
+            background-color: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            height: fit-content;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #1a3e72;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .alert-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .alert-item {
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+            display: flex;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+
+        .alert-item:hover {
+            background-color: #f9f9f9;
+        }
+
+        .alert-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background-color: #ff6b6b;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-size: 14px;
+        }
+
+        .alert-content {
+            flex: 1;
+        }
+
+        .alert-time {
+            font-size: 12px;
+            color: #777;
+        }
+
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #4CAF50;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 15px;
+        }
+
+        .image-wrapper {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            background-color: #f0f0f0;
+        }
+
+
+        footer {
+            background-color: #1a3e72;
+            color: white;
+            text-align: center;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                order: -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                padding: 10px;
+                text-align: center;
+            }
+
+            .header-left,
+            .header-right {
+                width: 100%;
+                justify-content: center;
+                margin-bottom: 10px;
+            }
+
+            .stats-display {
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+
+            #main-content {
+                padding-top: 120px;
+            }
+
+            #camera-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+
+<body>
+    <header>
+        <div class="header-left">
+            <img src="logo.png" alt="Traffic Monitoring Logo">
+            <h1>Traffic Monitoring - Vehicle Detection</h1>
+        </div>
+        <div class="header-right">
+            <div class="stats-display">
+                <i class="fas fa-car"></i> <span id="vehicle-count">0</span> vehicles detected
+            </div>
+            <a href="https://cctv.lskk.co.id/device/CAM-P024" id="link-button" target="_blank">
+                <i class="fas fa-chart-line"></i> View Analytics
+            </a>
+        </div>
+    </header>
+
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <h2>Connecting to traffic cameras...</h2>
+        <p id="connection-status">Initializing connection</p>
+    </div>
+
+    <div id="main-content">
+        <div class="dashboard">
+            <div id="camera-container">
+                <!-- Camera views will be added dynamically -->
+            </div>
+
+            <div class="sidebar">
+                <div class="sidebar-title">
+                    <i class="fas fa-exclamation-triangle"></i> Recent Alerts
+                </div>
+                <ul class="alert-list" id="alert-list">
+                    <!-- Alerts will be added dynamically -->
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2025 Traffic Monitoring System. All rights reserved.</p>
+    </footer>
+
+    <script>
+        // Camera data - using your actual camera IDs
+        const cameras = [
+            { id: 'CAM-P024', name: 'Jalan Pelajar Pejuang 45', location: '' },
+            { id: 'CAM-P013', name: 'SMKN 1 BRASEL', location: '' },
+            { id: 'CAM-P083', name: 'RAWA KIDANG', location: '' },
+            { id: 'CAM-P093', name: 'TNWK', location: '' }
+        ];
+
+        // Vehicle detection statistics
+        const vehicleStats = {
+            totalDetected: 0,
+            byType: {
+                car: 0,
+                motorcycle: 0,
+                truck: 0,
+                bus: 0
+            },
+            byCamera: {}
+        };
+
+        // Recent alerts
+        const recentAlerts = [];
+        let ws;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+        const reconnectDelay = 3000; // 3 seconds
+
+        // Initialize the UI
+        document.addEventListener('DOMContentLoaded', function () {
+            initializeCameraViews();
+            connectWebSocket();
+        });
+
+        function initializeCameraViews() {
+            const container = document.getElementById('camera-container');
+
+            cameras.forEach(camera => {
+                const cameraView = document.createElement('div');
+                cameraView.className = 'camera-view';
+                cameraView.id = `camera-${camera.id}`;
+
+                cameraView.innerHTML = `
+                    <div class="image-wrapper">
+                        <div class="image-loading"></div>
+                        <img src="https://smartparking.pptik.id/data/data/default.jpg" alt="${camera.name} Camera Feed" loading="lazy">
+                    </div>
+                    <div class="camera-info">
+                        <div class="camera-title">${camera.name}</div>
+                        <div class="camera-stats">
+                            <div class="stat-item"><i class="fas fa-car"></i> <span class="car-count">0</span></div>
+                            <div class="stat-item"><i class="fas fa-motorcycle"></i> <span class="motorcycle-count">0</span></div>
+                            <div class="stat-item"><i class="fas fa-truck"></i> <span class="truck-count">0</span></div>
+                            <div class="stat-item"><i class="fas fa-bus"></i> <span class="bus-count">0</span></div>
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(cameraView);
+                vehicleStats.byCamera[camera.id] = {
+                    car: 0,
+                    motorcycle: 0,
+                    truck: 0,
+                    bus: 0
+                };
+            });
+        }
+
+        function connectWebSocket() {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const statusText = document.getElementById('connection-status');
+
+            statusText.textContent = "Connecting to server...";
+            loadingOverlay.style.display = 'flex';
+
+            ws = new WebSocket('wss://worker-cctv.pptik.id');
+
+            ws.onopen = function () {
+                console.log('WebSocket connection established');
+                statusText.textContent = "Connected. Subscribing to cameras...";
+                reconnectAttempts = 0;
+
+                // Subscribe to camera feeds
+                cameras.forEach(camera => {
+                    ws.send(JSON.stringify({
+                        action: 'subscribe',
+                        topic: camera.id
+                    }));
+                });
+
+                setTimeout(() => {
+                    statusText.textContent = "Connected to all cameras";
+                    setTimeout(() => {
+                        loadingOverlay.style.display = 'none';
+                    }, 500);
+                }, 1000);
+            };
+
+            ws.onmessage = function (event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('Received data:', data);
+
+                    // Update camera image
+                    if (data.guid_device && data.value) {
+                        updateCameraImage(data.guid_device, data.value, data.datetime);
+                    }
+
+                    // You can add more message handling here based on your server's data structure
+
+                } catch (error) {
+                    console.error('Error processing WebSocket message:', error);
+                }
+            };
+
+            ws.onclose = function (event) {
+                console.log('WebSocket connection closed:', event.code, event.reason);
+
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    statusText.textContent = `Connection lost. Reconnecting (attempt ${reconnectAttempts}/${maxReconnectAttempts})...`;
+
+                    setTimeout(() => {
+                        connectWebSocket();
+                    }, reconnectDelay);
+                } else {
+                    statusText.textContent = "Connection failed. Please refresh the page.";
+                }
+            };
+
+            ws.onerror = function (error) {
+                console.error('WebSocket error:', error);
+                statusText.textContent = "Connection error occurred";
+            };
+        }
+
+        function updateCameraImage(cameraId, imagePath, timestamp) {
+            const cameraElement = document.getElementById(`camera-${cameraId}`);
+            if (!cameraElement) return;
+
+            const imageWrapper = cameraElement.querySelector('.image-wrapper');
+            const imgElement = cameraElement.querySelector('img');
+            const loadingElement = cameraElement.querySelector('.image-loading');
+            const timestampElement = cameraElement.querySelector('.camera-stats');
+
+            // Add timestamp to prevent caching
+            const imageUrl = `https://smartparking.pptik.id/data/data/${imagePath}?t=${new Date().getTime()}`;
+
+            // Show loading state
+            if (loadingElement) loadingElement.style.display = 'block';
+            imgElement.classList.remove('loaded');
+
+            imgElement.onload = function () {
+                imgElement.classList.add('loaded');
+                if (loadingElement) loadingElement.style.display = 'none';
+
+                // Update timestamp if available
+                // if (timestamp) {
+                //     const timeElement = document.createElement('div');
+                //     timeElement.className = 'alert-time';
+                //     timeElement.textContent = `Updated: ${timestamp}`;
+                //     timestampElement.appendChild(timeElement);
+                // }
+
+                if (timestamp) {
+                if (!timestampElement) {
+                    // Buat element timestamp jika belum ada
+                    const timeContainer = document.createElement('div');
+                    timeContainer.className = 'timestamp-display';
+                    timeContainer.style.fontSize = '12px';
+                    timeContainer.style.color = '#eee';
+                    timeContainer.style.marginTop = '5px';
+                    cameraElement.querySelector('.camera-info').appendChild(timeContainer);
+                }
+                // Update teks timestamp yang sudah ada
+                const timeDisplay = cameraElement.querySelector('.timestamp-display');
+                timeDisplay.textContent = `Updated: ${timestamp}`;
+            }
+            };
+
+            imgElement.onerror = function () {
+                if (loadingElement) loadingElement.style.display = 'none';
+                imgElement.src = 'https://smartparking.pptik.id/data/data/default.jpg';
+            };
+
+            imgElement.src = imageUrl;
+        }
+
+        function formatTimestamp(timestamp) {
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleTimeString();
+            } catch (e) {
+                return new Date().toLocaleTimeString();
+            }
+        }
+
+        function addAlert(alertData) {
+            const alertTypes = {
+                congestion: { icon: 'fas fa-traffic-light', color: '#ff9f43' },
+                accident: { icon: 'fas fa-car-crash', color: '#ff6b6b' },
+                speeding: { icon: 'fas fa-tachometer-alt', color: '#feca57' },
+                stopped: { icon: 'fas fa-car-side', color: '#5f27cd' }
+            };
+
+            const alertType = alertData.type || 'congestion';
+            const alertConfig = alertTypes[alertType] || alertTypes.congestion;
+
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+
+            recentAlerts.unshift({
+                type: alertType,
+                text: alertData.message || `Traffic alert at ${alertData.location || 'unknown location'}`,
+                time: timeString,
+                camera: alertData.cameraId || 'unknown',
+                icon: alertConfig.icon,
+                color: alertConfig.color
+            });
+
+            // Keep only the last 10 alerts
+            if (recentAlerts.length > 10) {
+                recentAlerts.pop();
+            }
+
+            updateAlertList();
+        }
+
+        function updateAlertList() {
+            const alertList = document.getElementById('alert-list');
+            alertList.innerHTML = '';
+
+            recentAlerts.forEach(alert => {
+                const alertItem = document.createElement('li');
+                alertItem.className = 'alert-item';
+
+                alertItem.innerHTML = `
+                    <div class="alert-icon" style="background-color: ${alert.color}">
+                        <i class="${alert.icon}"></i>
+                    </div>
+                    <div class="alert-content">
+                        <div>${alert.text}</div>
+                        <div class="alert-time">${alert.time} - Cam ${alert.camera}</div>
+                    </div>
+                `;
+
+                alertList.appendChild(alertItem);
+            });
+        }
+
+        // Handle page visibility changes to reconnect when tab becomes active
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible' && (!ws || ws.readyState === WebSocket.CLOSED)) {
+                connectWebSocket();
+            }
+        });
+    </script>
+</body>
+
+</html>
