@@ -372,8 +372,10 @@
         const cameras = [
             { id: 'CAM-P024', name: 'Jalan Pelajar Pejuang 45', location: '' },
             { id: 'CAM-P013', name: 'SMKN 1 BRASEL', location: '' },
-            { id: 'CAM-P083', name: 'RAWA KIDANG', location: '' },
-            { id: 'CAM-P093', name: 'TNWK', location: '' }
+            // { id: 'CAM-P083', name: 'RAWA KIDANG', location: '' },
+            // { id: 'AM-P027', name: 'PARKIR SMKN 1 BRASEL', location: '' },
+            // { id: 'AM-P092', name: 'PARKIR KANTORSEKSI TNWK', location: '' },
+            // { id: 'AM-P093', name: 'TNWK', location: '' }
         ];
 
         // Vehicle detection statistics
@@ -394,11 +396,17 @@
         let reconnectAttempts = 0;
         const maxReconnectAttempts = 5;
         const reconnectDelay = 3000; // 3 seconds
+        let lastApiFetchTimes = {}; // To track when we last fetched from API for each camera
 
         // Initialize the UI
         document.addEventListener('DOMContentLoaded', function () {
             initializeCameraViews();
             connectWebSocket();
+
+            // Set up API fallback checks
+            cameras.forEach(camera => {
+                lastApiFetchTimes[camera.id] = 0;
+            });
         });
 
         function initializeCameraViews() {
@@ -473,9 +481,9 @@
                     // Update camera image
                     if (data.guid_device && data.value) {
                         updateCameraImage(data.guid_device, data.value, data.datetime);
+                        // Update last received time for this camera
+                        lastApiFetchTimes[data.guid_device] = Date.now();
                     }
-
-                    // You can add more message handling here based on your server's data structure
 
                 } catch (error) {
                     console.error('Error processing WebSocket message:', error);
@@ -494,6 +502,10 @@
                     }, reconnectDelay);
                 } else {
                     statusText.textContent = "Connection failed. Please refresh the page.";
+                    // When WS fails, try to get data from API for all cameras
+                    cameras.forEach(camera => {
+                        fetchCameraDataFromAPI(camera.id);
+                    });
                 }
             };
 
@@ -501,6 +513,29 @@
                 console.error('WebSocket error:', error);
                 statusText.textContent = "Connection error occurred";
             };
+        }
+
+        // Function to fetch camera data from API
+        function fetchCameraDataFromAPI(cameraId) {
+            const now = Date.now();
+            // Only fetch from API if we haven't done so in the last 30 seconds
+            if (now - lastApiFetchTimes[cameraId] < 30000) {
+                return;
+            }
+
+            lastApiFetchTimes[cameraId] = now;
+
+            fetch(`https://hydro-connect.pptik.id/api/api.v1/devices/data/1/1/${cameraId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status && data.history && data.history.length > 0) {
+                        const latestData = data.history[0];
+                        updateCameraImage(cameraId, latestData.value, latestData.datetime);
+                    }
+                })
+                .catch(error => {
+                    console.error(`Error fetching data for camera ${cameraId}:`, error);
+                });
         }
 
         function updateCameraImage(cameraId, imagePath, timestamp) {
@@ -523,28 +558,20 @@
                 imgElement.classList.add('loaded');
                 if (loadingElement) loadingElement.style.display = 'none';
 
-                // Update timestamp if available
-                // if (timestamp) {
-                //     const timeElement = document.createElement('div');
-                //     timeElement.className = 'alert-time';
-                //     timeElement.textContent = `Updated: ${timestamp}`;
-                //     timestampElement.appendChild(timeElement);
-                // }
-
                 if (timestamp) {
-                if (!timestampElement) {
-                    // Buat element timestamp jika belum ada
-                    const timeContainer = document.createElement('div');
-                    timeContainer.className = 'timestamp-display';
-                    timeContainer.style.fontSize = '12px';
-                    timeContainer.style.color = '#eee';
-                    timeContainer.style.marginTop = '5px';
-                    cameraElement.querySelector('.camera-info').appendChild(timeContainer);
+                    if (!timestampElement) {
+                        // Create timestamp element if it doesn't exist
+                        const timeContainer = document.createElement('div');
+                        timeContainer.className = 'timestamp-display';
+                        timeContainer.style.fontSize = '12px';
+                        timeContainer.style.color = '#eee';
+                        timeContainer.style.marginTop = '5px';
+                        cameraElement.querySelector('.camera-info').appendChild(timeContainer);
+                    }
+                    // Update existing timestamp text
+                    const timeDisplay = cameraElement.querySelector('.timestamp-display');
+                    timeDisplay.textContent = `Updated: ${timestamp}`;
                 }
-                // Update teks timestamp yang sudah ada
-                const timeDisplay = cameraElement.querySelector('.timestamp-display');
-                timeDisplay.textContent = `Updated: ${timestamp}`;
-            }
             };
 
             imgElement.onerror = function () {
@@ -616,6 +643,17 @@
                 alertList.appendChild(alertItem);
             });
         }
+
+        // Set up interval to check for stale camera data and fetch from API if needed
+        setInterval(() => {
+            const now = Date.now();
+            cameras.forEach(camera => {
+                // If we haven't received data for this camera in the last 30 seconds
+                if (now - lastApiFetchTimes[camera.id] > 30000) {
+                    fetchCameraDataFromAPI(camera.id);
+                }
+            });
+        }, 15000); // Check every 15 seconds
 
         // Handle page visibility changes to reconnect when tab becomes active
         document.addEventListener('visibilitychange', function () {
